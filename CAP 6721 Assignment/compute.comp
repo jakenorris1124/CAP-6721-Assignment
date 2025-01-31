@@ -1,0 +1,135 @@
+#version 430 core
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in; // You may use x and y size to be different from 1. In such a case adjust the workgroup numbers during shader dispatch time
+
+// Declare an image2D variable to represent a viewport raster image
+layout (rgba32f, binding = 0) uniform image2D outputImage;
+
+// Define a Ray structure
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+    float tmin, tmax;
+};
+
+struct Sphere {
+    vec3 center;
+    float radius;
+};
+
+// Inside the compute shader kernel:
+uniform vec3 eye, at, up;
+uniform float fov;
+uniform vec2 resolution;
+
+vec4 missShader(Ray ray) 
+{
+    vec3 unit_direction = normalize(ray.direction);
+    float a = 0.5*(unit_direction.y + 1.0);
+    vec3 color = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
+
+    return vec4(color.xyz, 1.0);
+}
+
+vec4 hitShader(Ray ray, float t, Sphere sphere)
+{
+    vec3 intersectionPoint = ray.origin + (t * ray.direction);
+    vec3 sphereNormal = normalize(intersectionPoint - sphere.center);
+
+    return 0.5 * vec4(sphereNormal.xyz + 1.0, 1.0);
+}
+
+float sphereHit(Sphere sphere, Ray ray)
+{
+    vec3 oc = ray.origin - sphere.center;
+    float a = dot(ray.direction, ray.direction);
+    float b = 2.0 * dot(ray.direction, oc);
+    float c = dot(oc, oc) - (sphere.radius * sphere.radius);
+    float discriminant = (b * b) - (4.0 * a * c);
+
+    if (discriminant < 0.0)
+        return -1.0;
+
+    discriminant = sqrt(discriminant);
+    float t = (-b - discriminant)  / (2.0 * a);
+
+    if (t <= ray.tmin)
+        t = (-b + discriminant)  / (2.0 * a);
+
+    if (t > ray.tmin && t < ray.tmax)
+        return t;
+        
+    return -1.0;
+}
+
+float optimizedSphereHit(Sphere sphere, Ray ray)
+{
+    vec3 co = sphere.center - ray.origin;
+    float l2 = dot(co, co);
+    float r2 = sphere.radius * sphere.radius;
+
+    float s  = dot(co, ray.direction);
+    float m2 = l2 - (s * s);
+    
+    if (m2 <= r2)
+    {
+        float q = sqrt(r2 - m2);
+        return s - q;
+    }
+
+    return -1.0;
+}
+
+vec4 rayColor(Ray ray) 
+{
+    // Hardcode spheres for now
+    Sphere sphere1;
+    sphere1.center = vec3(0.0, 0.0, -1.0);
+    sphere1.radius = 0.5;
+    Sphere sphere2;
+    sphere2.center = vec3(0.0, -100.5, -1);
+    sphere2.radius = 100.0;
+
+    // Check if ray hits Sphere1, and return if it does since its closer than sphere2
+    float t = optimizedSphereHit(sphere1, ray);
+    if (t > 0.0)
+        return hitShader(ray, t, sphere1);
+
+    // Check if ray hits sphere2
+    t = optimizedSphereHit(sphere2, ray);
+    if (t > 0.0)
+        return hitShader(ray, t, sphere2);
+
+     return missShader(ray);
+}
+
+Ray rayGenerate(vec2 pixel) 
+{
+    Ray ray;
+    vec3 w = normalize(eye-at);
+    vec3 u = normalize(cross(up,w));
+    vec3 v = cross(w,u);
+    float height = 2.0*tan(fov/2.0);
+    float width = height * resolution.x/ resolution.y;
+    ray.origin = eye;
+    ray.direction = normalize(-w 
+    + ((1 - ((2.0 * pixel.y + 1) / resolution.y)) * (height / 2.0) * v)
+    - ((1 - ((2.0 * pixel.x + 1) / resolution.x)) * (width / 2.0) * u)
+    ); 
+    ray.tmax = 1.0 / 0.0;
+    ray.tmin = 0.0;
+    return ray;
+}
+
+void main() {
+
+    // Get thread coordinates
+    vec2 pixel = gl_GlobalInvocationID.xy;
+
+    // generate rays for pixel(x,y) 
+    Ray ray = rayGenerate(pixel);
+    vec4 color = rayColor(ray);
+
+    // Write the calculated color to the output image
+    imageStore(outputImage, ivec2(pixel.x, pixel.y), color);
+}
+
