@@ -132,6 +132,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="createQuadVAO.cpp" />
+    <ClCompile Include="debug.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="setupShaderPrograms.cpp" />
     <ClCompile Include="setupShaderPrograms.h" />
@@ -143,6 +144,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="createQuadVAO.h" />
+    <ClInclude Include="debug.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

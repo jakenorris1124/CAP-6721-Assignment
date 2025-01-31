@@ -6,6 +6,7 @@
 // Include Helper Files
 #include "setupShaderPrograms.h"
 #include "createQuadVAO.h"
+#include "debug.h"
 
 
 vec3 eye, at, up;
