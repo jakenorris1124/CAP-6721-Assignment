@@ -20,18 +20,32 @@ class ModelWrapper
 	private:
 		std::string name;
 		std::vector<Sphere> spheres;
+		GLuint sphereBuffer;
 		Box bounds;
-		GLuint storageBuffer;
+		GLuint boundsBuffer;
+
+		int binding = 0;
+		void bindData(void* data, int size, GLuint buffer)
+		{
+			glNamedBufferData(buffer, size, data, GL_STATIC_DRAW);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer);
+
+			binding++;
+		}
 
 	public:
 		ModelWrapper(std::string modelName) : name(modelName) 
 		{
-			glGenBuffers(1, &storageBuffer);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, storageBuffer);
+			// Create sphere buffer
+			glGenBuffers(1, &sphereBuffer);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, sphereBuffer);
+
+			// Create bounds buffer
+			glGenBuffers(1, &boundsBuffer);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, boundsBuffer);
 		}
 
 		std::string getName() { return name; }
-		GLuint getStorageBuffer() { return storageBuffer; }
 
 		void load(std::string path) 
 		{
@@ -52,18 +66,7 @@ class ModelWrapper
 			bounds.min = { data[name]["box"]["min"][0], data[name]["box"]["min"][1], data[name]["box"]["min"][2] };
 			bounds.max = { data[name]["box"]["max"][0], data[name]["box"]["max"][1], data[name]["box"]["max"][2] };
 
-			struct Model
-			{
-				std::vector<Sphere> spheres;
-				Box bounds;
-			};
-			Model payload{ spheres = spheres, bounds = bounds };
-
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Model), &payload, GL_STATIC_DRAW);
-		}
-
-		void bind()
-		{
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, storageBuffer);
+			bindData(&bounds, sizeof(bounds), boundsBuffer);
+			bindData(&spheres, sizeof(Sphere) * spheres.size(), sphereBuffer);
 		}
 };

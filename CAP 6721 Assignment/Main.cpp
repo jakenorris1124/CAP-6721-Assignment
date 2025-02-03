@@ -21,7 +21,6 @@ void loadModel(std::string name, std::string path)
 {
 	ModelWrapper molecule = ModelWrapper(name);
 	molecule.load(path);
-	molecule.bind();
 }
 
 void setUniforms()
