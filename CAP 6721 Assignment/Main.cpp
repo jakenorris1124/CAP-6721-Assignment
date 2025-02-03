@@ -7,12 +7,22 @@
 #include "setupShaderPrograms.h"
 #include "createQuadVAO.h"
 #include "debug.h"
+#include "model.h"
 
 
 vec3 eye, at, up;
 float fov;
 
 uint quadVAO;
+
+const std::string modelPath = "./molecules.json";
+
+void loadModel(std::string name, std::string path)
+{
+	ModelWrapper molecule = ModelWrapper(name);
+	molecule.load(path);
+	molecule.bind();
+}
 
 void setUniforms()
 {
@@ -58,6 +68,8 @@ int main(int argc, char* argv[])
 	setupDrawProgram();
 	setupComputeProgram();
 	quadVAO = createQuadVAO();
+	loadModel("Ethanol", modelPath);
+
 	do {
 		glClear(GL_COLOR_BUFFER_BIT);
 		compute();
