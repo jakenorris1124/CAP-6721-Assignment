@@ -12,22 +12,23 @@ struct Ray {
 };
 
 struct Sphere {
+    vec4 color;
     vec3 center;
     float radius;
-    vec3 color;
 };
 
 struct Box {
-    vec3 minimum;
-    vec3 maximum;
+    vec4 minimum;
+    vec4 maximum;
 };
 
-layout (std430, binding = 1) readonly buffer boundsBuffer
+
+layout (std430, binding = 10) readonly buffer boundsBuffer
 {
     Box bounds;
 };
 
-layout (std430, binding = 2) readonly buffer sphereBuffer
+layout (std430, binding = 11) readonly buffer sphereBuffer
 {
     Sphere spheres[];
 };
@@ -53,7 +54,7 @@ vec4 hitShader(Ray ray, float t, Sphere sphere)
 
     float angle = dot(normalize(eye), sphereNormal);
 
-    return vec4(sphere.color, 1.0) * angle;
+    return vec4(sphere.color.xyz, 1.0) * angle;
 }
 
 float sphereHit(Sphere sphere, Ray ray)
@@ -97,10 +98,10 @@ float optimizedSphereHit(Sphere sphere, Ray ray)
     return -1.0;
 }
 
-bool aabbHit(Ray ray, Box bounds)
+bool aabbHit(Ray ray, Box aabb)
 {
-    vec3 tMin = (bounds.minimum - ray.origin) / ray.direction;
-    vec3 tMax = (bounds.maximum - ray.origin) / ray.direction;
+    vec3 tMin = (aabb.minimum.xyz - ray.origin) / ray.direction;
+    vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
 
     vec3 t1 = min(tMin, tMax);
     vec3 t2 = max(tMin, tMax);
@@ -113,8 +114,8 @@ bool aabbHit(Ray ray, Box bounds)
 
 vec4 rayColor(Ray ray) 
 {
-    //if(!aabbHit(ray, bounds))
-       // return missShader(ray);
+   if(!aabbHit(ray, bounds))
+     return missShader(ray);
 
     int numSpheres = spheres.length();
     float closestT = ray.tmax;

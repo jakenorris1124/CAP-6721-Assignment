@@ -7,13 +7,13 @@ using namespace glm;
 
 struct Sphere
 {
+	glm::vec4 color;
 	glm::vec3 center;
-	glm::vec3 color;
 	float radius;
 };
 
 struct Box
 {
-	glm::vec3 min;
-	glm::vec3 max;
+	glm::vec4 min;
+	glm::vec4 max;
 };

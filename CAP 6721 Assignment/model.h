@@ -24,7 +24,7 @@ class ModelWrapper
 		Box bounds;
 		GLuint boundsBuffer;
 
-		int binding = 1;
+		int binding = 10;
 		void bindData(void* data, int size, GLuint buffer)
 		{
 			glNamedBufferData(buffer, size, data, GL_STATIC_COPY_ARB);
@@ -63,17 +63,16 @@ class ModelWrapper
 				Sphere sphere;
 				sphere.center = vec3(data[name]["quadruples"][quad], data[name]["quadruples"][quad + 1], data[name]["quadruples"][quad + 2]);
 				sphere.radius = data[name]["quadruples"][quad + 3];
-				sphere.color = vec3(data[name]["color"][tri], data[name]["color"][tri + 1], data[name]["color"][tri + 2]);
+				sphere.color = vec4(data[name]["color"][tri], data[name]["color"][tri + 1], data[name]["color"][tri + 2], 1.0);
 				sphere.color /= 255.0;
 
 				spheres.push_back(sphere);
 			}
 
-			bounds.min = vec3(data[name]["box"]["min"][0], data[name]["box"]["min"][1], data[name]["box"]["min"][2]);
-			bounds.max = vec3(data[name]["box"]["max"][0], data[name]["box"]["max"][1], data[name]["box"]["max"][2]);
+			bounds.min = vec4(data[name]["box"]["min"][0], data[name]["box"]["min"][1], data[name]["box"]["min"][2], 1.0);
+			bounds.max = vec4(data[name]["box"]["max"][0], data[name]["box"]["max"][1], data[name]["box"]["max"][2], 1.0);
 
 			bindData(&bounds, sizeof(Box), boundsBuffer);
 			bindData(&spheres.data()[0], sizeof(Sphere) * spheres.size(), sphereBuffer);
-
 		}
 };
