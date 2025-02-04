@@ -24,10 +24,10 @@ class ModelWrapper
 		Box bounds;
 		GLuint boundsBuffer;
 
-		int binding = 0;
+		int binding = 1;
 		void bindData(void* data, int size, GLuint buffer)
 		{
-			glNamedBufferData(buffer, size, data, GL_STATIC_DRAW);
+			glNamedBufferData(buffer, size, data, GL_STATIC_COPY_ARB);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer);
 
 			binding++;
@@ -46,6 +46,8 @@ class ModelWrapper
 		}
 
 		std::string getName() { return name; }
+		vec3 getCenter() { return bounds.min + ((bounds.max - bounds.min) * 0.5f); }
+		float getDiagonal() { return glm::length(bounds.max - bounds.min); }
 
 		void load(std::string path) 
 		{
@@ -55,18 +57,23 @@ class ModelWrapper
 			int numSpheres = data[name]["quadruples"].size() / 4;
 			for (auto i = 0; i < numSpheres; i++)
 			{
+				int quad = i * 4;
+				int tri = i * 3;
+
 				Sphere sphere;
-				sphere.center = { data[name]["quadruples"][i], data[name]["quadruples"][i + 1], data[name]["quadruples"][i + 2] };
-				sphere.radius = data[name]["quadruples"][i + 3];
-				sphere.color = { data[name]["color"][i], data[name]["color"][i + 1], data[name]["color"][i + 2] };
+				sphere.center = vec3(data[name]["quadruples"][quad], data[name]["quadruples"][quad + 1], data[name]["quadruples"][quad + 2]);
+				sphere.radius = data[name]["quadruples"][quad + 3];
+				sphere.color = vec3(data[name]["color"][tri], data[name]["color"][tri + 1], data[name]["color"][tri + 2]);
+				sphere.color /= 255.0;
 
 				spheres.push_back(sphere);
 			}
 
-			bounds.min = { data[name]["box"]["min"][0], data[name]["box"]["min"][1], data[name]["box"]["min"][2] };
-			bounds.max = { data[name]["box"]["max"][0], data[name]["box"]["max"][1], data[name]["box"]["max"][2] };
+			bounds.min = vec3(data[name]["box"]["min"][0], data[name]["box"]["min"][1], data[name]["box"]["min"][2]);
+			bounds.max = vec3(data[name]["box"]["max"][0], data[name]["box"]["max"][1], data[name]["box"]["max"][2]);
 
-			bindData(&bounds, sizeof(bounds), boundsBuffer);
-			bindData(&spheres, sizeof(Sphere) * spheres.size(), sphereBuffer);
+			bindData(&bounds, sizeof(Box), boundsBuffer);
+			bindData(&spheres.data()[0], sizeof(Sphere) * spheres.size(), sphereBuffer);
+
 		}
 };

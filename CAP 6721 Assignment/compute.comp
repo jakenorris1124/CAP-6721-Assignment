@@ -14,6 +14,22 @@ struct Ray {
 struct Sphere {
     vec3 center;
     float radius;
+    vec3 color;
+};
+
+struct Box {
+    vec3 minimum;
+    vec3 maximum;
+};
+
+layout (std430, binding = 1) readonly buffer boundsBuffer
+{
+    Box bounds;
+};
+
+layout (std430, binding = 2) readonly buffer sphereBuffer
+{
+    Sphere spheres[];
 };
 
 // Inside the compute shader kernel:
@@ -35,7 +51,9 @@ vec4 hitShader(Ray ray, float t, Sphere sphere)
     vec3 intersectionPoint = ray.origin + (t * ray.direction);
     vec3 sphereNormal = normalize(intersectionPoint - sphere.center);
 
-    return 0.5 * vec4(sphereNormal.xyz + 1.0, 1.0);
+    float angle = dot(normalize(eye), sphereNormal);
+
+    return vec4(sphere.color, 1.0) * angle;
 }
 
 float sphereHit(Sphere sphere, Ray ray)
@@ -79,27 +97,41 @@ float optimizedSphereHit(Sphere sphere, Ray ray)
     return -1.0;
 }
 
+bool aabbHit(Ray ray, Box bounds)
+{
+    vec3 tMin = (bounds.minimum - ray.origin) / ray.direction;
+    vec3 tMax = (bounds.maximum - ray.origin) / ray.direction;
+
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+
+    float tNear = max(max(max(t1.x, t1.y), t1.z), ray.tmin);
+    float tFar = min(min(min(t2.x, t2.y), t2.z), ray.tmax);
+
+    return tNear <= tFar;
+}
+
 vec4 rayColor(Ray ray) 
 {
-    // Hardcode spheres for now
-    Sphere sphere1;
-    sphere1.center = vec3(0.0, 0.0, -1.0);
-    sphere1.radius = 0.5;
-    Sphere sphere2;
-    sphere2.center = vec3(0.0, -100.5, -1);
-    sphere2.radius = 100.0;
+    //if(!aabbHit(ray, bounds))
+       // return missShader(ray);
 
-    // Check if ray hits Sphere1, and return if it does since its closer than sphere2
-    float t = optimizedSphereHit(sphere1, ray);
-    if (t > 0.0)
-        return hitShader(ray, t, sphere1);
+    int numSpheres = spheres.length();
+    float closestT = ray.tmax;
+    int closestI = -1;
+    for (int i  = 0; i < numSpheres; i++)
+    {
+        float intermediateT = optimizedSphereHit(spheres[i], ray);
+        if (intermediateT < closestT && intermediateT > ray.tmin)
+        {
+            closestT = intermediateT;
+            closestI = i;
+        }
+    }
 
-    // Check if ray hits sphere2
-    t = optimizedSphereHit(sphere2, ray);
-    if (t > 0.0)
-        return hitShader(ray, t, sphere2);
-
-     return missShader(ray);
+    if (closestI != -1)
+        return hitShader(ray, closestT, spheres[closestI]);
+    return missShader(ray);
 }
 
 Ray rayGenerate(vec2 pixel) 

@@ -8,8 +8,8 @@ using namespace glm;
 struct Sphere
 {
 	glm::vec3 center;
-	float radius;
 	glm::vec3 color;
+	float radius;
 };
 
 struct Box
