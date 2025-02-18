@@ -48,6 +48,7 @@ class ModelWrapper
 		std::string getName() { return name; }
 		vec3 getCenter() { return bounds.min + ((bounds.max - bounds.min) * 0.5f); }
 		float getDiagonal() { return glm::length(bounds.max - bounds.min); }
+		Box getBounds() { return bounds; }
 
 		void load(std::string path) 
 		{
