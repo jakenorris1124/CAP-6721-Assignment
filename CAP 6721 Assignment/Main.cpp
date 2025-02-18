@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "model.h"
 #include "camera.h"
+#include "createWalls.h"
 
 uint quadVAO;
 
@@ -49,15 +50,18 @@ int main(int argc, char* argv[])
 	ModelWrapper molecule = ModelWrapper(modelName);
 	molecule.load(modelPath);
 	vec3 center = molecule.getCenter();
+
+	Box aabb = { vec4(-1, -1, -1, 1), vec4(1, 1, 1, 1) };
+	float delta = 0.1;
+	createTransformMatrices(aabb, delta, molecule);
 	
 	Camera camera = Camera(
-		vec3(center.x, center.y, center.z + molecule.getDiagonal()),
+		vec3(center.x, center.y, center.z + molecule.getDiagonal() * 2),
 		center,
 		vec3(0.0, 1.0, 0.0),
-		90.0
+		45.0
 	);
 	camera.activate(computeProgram);
-	camera.setRotation(1.0, vec3(0.0, center.y, 0.0));
 
 	do {
 		glClear(GL_COLOR_BUFFER_BIT);

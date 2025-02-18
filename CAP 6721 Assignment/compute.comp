@@ -33,6 +33,18 @@ layout (std430, binding = 11) readonly buffer sphereBuffer
     Sphere spheres[];
 };
 
+/*
+* Index 0 -> Left wall
+* Index 1 -> Right wall
+* Index 2 -> Top wall
+* Index 3 -> Bottom wall
+* Index 4 -> Back wall
+*/
+layout (std430, binding = 20) readonly buffer wallBuffer
+{
+    mat4 wallMatrices[];
+};
+
 // Inside the compute shader kernel:
 uniform vec3 eye, at, up;
 uniform float fov;
@@ -55,6 +67,16 @@ vec4 hitShader(Ray ray, float t, Sphere sphere)
     float angle = dot(normalize(eye), sphereNormal);
 
     return vec4(sphere.color.xyz, 1.0) * angle;
+}
+
+vec4 boxHitShader(vec3 color, vec3 normal)
+{
+    float angle = dot(normalize(eye), normal);
+
+    if (angle > 0.2)
+        return vec4(color, 1.0) * angle;
+
+    return vec4(color, 1.0) * 0.4;
 }
 
 float sphereHit(Sphere sphere, Ray ray)
@@ -112,27 +134,97 @@ bool aabbHit(Ray ray, Box aabb)
     return tNear <= tFar;
 }
 
+float aabbHitPoint(Ray ray, Box aabb)
+{
+    vec3 tMin = (aabb.minimum.xyz - ray.origin) / ray.direction;
+    vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
+
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+
+    float tNear = max(max(max(t1.x, t1.y), t1.z), ray.tmin);
+    float tFar = min(min(min(t2.x, t2.y), t2.z), ray.tmax);
+
+    if (tNear <= tFar)
+        return length(t1 - ray.origin);
+
+    return -1;
+}
+
+vec3 aabbHitNormal(Ray ray, Box aabb)
+{
+    vec3 tMin = (aabb.minimum.xyz - ray.origin) / ray.direction;
+    vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
+
+    vec3 t1 = min(tMin, tMax);
+    int dir = 1;
+    if (tMin == t1)
+        dir = -1;
+
+    float tNear = max(max(max(t1.x, t1.y), t1.z), ray.tmin);
+
+    if (t1.x == tNear)
+        return vec3(0, dir, 0);
+    if (t1.y == tNear)
+        return vec3(dir, 0, 0);
+    return vec3(0, 0, dir);
+}
+
 vec4 rayColor(Ray ray) 
 {
-   if(!aabbHit(ray, bounds))
-     return missShader(ray);
-
-    int numSpheres = spheres.length();
-    float closestT = ray.tmax;
-    int closestI = -1;
-    for (int i  = 0; i < numSpheres; i++)
-    {
-        float intermediateT = optimizedSphereHit(spheres[i], ray);
-        if (intermediateT < closestT && intermediateT > ray.tmin)
+   if(aabbHit(ray, bounds))
+   {
+        int numSpheres = spheres.length();
+        float closestT = ray.tmax;
+        int closestI = -1;
+        for (int i  = 0; i < numSpheres; i++)
         {
-            closestT = intermediateT;
-            closestI = i;
+            float intermediateT = optimizedSphereHit(spheres[i], ray);
+            if (intermediateT < closestT && intermediateT > ray.tmin)
+            {
+                closestT = intermediateT;
+                closestI = i;
+            }
         }
-    }
 
-    if (closestI != -1)
-        return hitShader(ray, closestT, spheres[closestI]);
-    return missShader(ray);
+        if (closestI != -1)
+            return hitShader(ray, closestT, spheres[closestI]);
+   }
+
+   Box canonical;
+   canonical.minimum = vec4(-1, -1, -1, 1);
+   canonical.maximum = vec4(1, 1, 1, 1);
+   float closestT = ray.tmax;
+   float closestI = -1;
+   vec3 normal;
+   for (int i = 0; i < 5; i++)
+   {
+        Ray wallRay = ray;
+        wallRay.origin = (inverse(wallMatrices[i]) * vec4(ray.origin, 1)).xyz;
+        wallRay.direction = (inverse(wallMatrices[i]) * vec4(ray.direction, 0)).xyz;
+
+        float t = aabbHitPoint(wallRay, canonical);
+        if (t > ray.tmin && t < closestT)
+        {
+           closestT = t;
+           closestI = i;
+
+           mat4 normalMatrix = transpose(inverse(wallMatrices[i]));
+           normal = normalize(normalMatrix * vec4(aabbHitNormal(wallRay, canonical), 0)).xyz;
+        }
+   }
+
+
+   if (closestI == 0)
+        return boxHitShader(vec3(1, 0, 0), normal);
+   if (closestI == 1)
+        return boxHitShader(vec3(0, 0, 1), normal);
+   if (closestI == 2 || closestI == 3)
+        return boxHitShader(vec3(0, 1, 0), normal);
+   if (closestI == 4)
+        return boxHitShader(vec3(1, 1, 1), normal);
+
+   return missShader(ray);
 }
 
 Ray rayGenerate(vec2 pixel) 
