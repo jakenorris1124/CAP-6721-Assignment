@@ -134,7 +134,7 @@ bool aabbHit(Ray ray, Box aabb)
     return tNear <= tFar;
 }
 
-float aabbHitPoint(Ray ray, Box aabb)
+vec3 aabbHitPoint(Ray ray, Box aabb)
 {
     vec3 tMin = (aabb.minimum.xyz - ray.origin) / ray.direction;
     vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
@@ -146,9 +146,9 @@ float aabbHitPoint(Ray ray, Box aabb)
     float tFar = min(min(min(t2.x, t2.y), t2.z), ray.tmax);
 
     if (tNear <= tFar)
-        return length(t1 - ray.origin);
+        return ray.origin + (t2 * ray.direction);
 
-    return -1;
+    return ray.origin;
 }
 
 vec3 aabbHitNormal(Ray ray, Box aabb)
@@ -203,14 +203,20 @@ vec4 rayColor(Ray ray)
         wallRay.origin = (inverse(wallMatrices[i]) * vec4(ray.origin, 1)).xyz;
         wallRay.direction = (inverse(wallMatrices[i]) * vec4(ray.direction, 0)).xyz;
 
-        float t = aabbHitPoint(wallRay, canonical);
-        if (t > ray.tmin && t < closestT)
+        vec3 point = aabbHitPoint(wallRay, canonical);
+        if(point != wallRay.origin)
         {
-           closestT = t;
-           closestI = i;
+            point = (wallMatrices[i] * vec4(point, 1)).xyz;
+            float t = distance(point, ray.origin);
 
-           mat4 normalMatrix = transpose(inverse(wallMatrices[i]));
-           normal = normalize(normalMatrix * vec4(aabbHitNormal(wallRay, canonical), 0)).xyz;
+            if (t > ray.tmin && t < closestT)
+            {
+               closestT = t;
+               closestI = i;
+
+               mat4 normalMatrix = transpose(inverse(wallMatrices[i]));
+               normal = normalize(normalMatrix * vec4(aabbHitNormal(wallRay, canonical), 0)).xyz;
+            }
         }
    }
 
