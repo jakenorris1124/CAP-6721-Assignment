@@ -16,7 +16,7 @@ void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
 
 	float hori = 20;
 	float vert = 20;
-	float dep = 1;
+	float dep = 20;
 
 
 	// Left wall
@@ -39,7 +39,7 @@ void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
 
 	// Back wall
 	scaleFactor = vec3(width, height, delta / 2);
-	translation = vec3(center.x, center.y, center.z - depth);
+	translation = vec3(center.x, center.y, center.z - (depth * dep));
 	matrices[4] = translate(scale(matrices[4], scaleFactor), translation);
 	
 	GLuint wallsBuffer;
