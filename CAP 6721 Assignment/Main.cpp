@@ -16,7 +16,7 @@ uint quadVAO;
 const std::string modelPath = "./molecules.json";
 const std::string modelName = "Ethanol";
 
-void compute(Camera* camera)
+void compute(Camera* camera, vec3 light)
 {
 	glUseProgram(computeProgram);
 	glBindImageTexture(0, texture_out, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
@@ -25,6 +25,7 @@ void compute(Camera* camera)
 	// Uniforms
 	(*camera).update();
 	glUniform2f(glGetUniformLocation(computeProgram, "resolution"), WindowWidth, WindowHeight);
+	glUniform3f(glGetUniformLocation(computeProgram, "light"), light.x, light.y, light.z);
 
 	glDispatchCompute(workgroups[0], workgroups[1], 1);
 }
@@ -63,9 +64,11 @@ int main(int argc, char* argv[])
 	);
 	camera.activate(computeProgram);
 
+	vec3 light = camera.getEye() - vec3(1, 0.3, 0.3);
+
 	do {
 		glClear(GL_COLOR_BUFFER_BIT);
-		compute(&camera);
+		compute(&camera, light);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		draw();
 		glfwSwapBuffers(window);
