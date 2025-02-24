@@ -35,6 +35,12 @@ struct BoxIntersection
     vec3 normal;
 };
 
+struct TraceResult
+{
+    float t;
+    vec4 color;
+};
+
 const int RAY_HIT_NONE = -1;
 const int RAY_FLAG_CAMERA = 1;
 const int RAY_FLAG_SHADOW = 2;
@@ -162,8 +168,8 @@ SphereIntersection intersectAllSpheres(Ray ray, int source)
     int closestI = -1;
     for (int i  = 0; i < numSpheres; i++)
     {
-        float intermediateT = optimizedSphereHit(spheres[i], ray);
-        if (validT(intermediateT, ray))
+        float intermediateT = sphereHit(spheres[i], ray);
+        if (validT(intermediateT, ray) && intermediateT < closestT)
         {
             // Return early if intersection found and the ray is a shadow ray
             if (source == RAY_FLAG_SHADOW)
@@ -291,28 +297,35 @@ BoxIntersection intersectAllBoxes(Ray ray, int source)
    return boxI;
 }
 
-vec4 trace(Ray ray, int source) 
+TraceResult traceRay(Ray ray, int source) 
 {
+    TraceResult trace;
     SphereIntersection spherePayload = intersectAllSpheres(ray, source);
     if(source == RAY_FLAG_SHADOW)
     {
         if(spherePayload.t == RAY_HIT_NONE)
-            return IN_LIGHT;
-        return IN_SHADOW;
+            trace.color = IN_LIGHT;
+        else
+            trace.color = IN_SHADOW;
+        return trace;
     }
 
     BoxIntersection boxPayload = intersectAllBoxes(ray, source);
     if(source == RAY_FLAG_SHADOW)
     {
         if(boxPayload.t == RAY_HIT_NONE)
-            return IN_LIGHT;
-        return IN_SHADOW;
+            trace.color = IN_LIGHT;
+        else
+            trace.color = IN_SHADOW;
+        return trace;
     }
 
     if(spherePayload.t != RAY_HIT_NONE && spherePayload.t < boxPayload.t)
     {
          vec3 hitPoint = ray.origin + (spherePayload.t * ray.direction);
-         return hitShader(ray, spherePayload.t, spherePayload.hit);
+         trace.color = hitShader(ray, spherePayload.t, spherePayload.hit);
+         trace.t = spherePayload.t;
+         return trace;
     }
     else if(boxPayload.t != RAY_HIT_NONE)
     {
@@ -326,10 +339,14 @@ vec4 trace(Ray ray, int source)
         if(boxPayload.hit == 4)
             color = vec4(1, 1, 1, 1);
 
-         return boxHitShader(color.xyz, boxPayload.normal);
+         trace.color = boxHitShader(color.xyz, boxPayload.normal);
+         trace.t = boxPayload.t;
+         return trace;
     }
 
-   return missShader(ray);
+   trace.color = missShader(ray);
+   trace.t = RAY_HIT_NONE;
+   return trace;
 }
 
 Ray rayGenerate(vec2 pixel) 
@@ -350,6 +367,17 @@ Ray rayGenerate(vec2 pixel)
     return ray;
 }
 
+Ray shadowRayGenerate(Ray ray, float t)
+{
+    Ray shadow;
+    shadow.origin = ray.origin + (t * ray.direction);
+    shadow.direction = light - shadow.origin;
+    shadow.tmin = 0.01;
+    shadow.tmax = length(shadow.direction);
+
+    return shadow;
+}
+
 void main() {
 
     // Get thread coordinates
@@ -357,7 +385,15 @@ void main() {
 
     // generate rays for pixel(x,y) 
     Ray ray = rayGenerate(pixel);
-    vec4 color = trace(ray, RAY_FLAG_CAMERA);
+    TraceResult primary = traceRay(ray, RAY_FLAG_CAMERA);
+
+    vec4 color = primary.color;
+    if(primary.t != RAY_HIT_NONE)
+    {
+        Ray shadow = shadowRayGenerate(ray, primary.t);
+        TraceResult secondary = traceRay(shadow, RAY_FLAG_SHADOW);
+        color = secondary.color * primary.color;
+    }
 
     // Write the calculated color to the output image
     imageStore(outputImage, ivec2(pixel.x, pixel.y), color);
