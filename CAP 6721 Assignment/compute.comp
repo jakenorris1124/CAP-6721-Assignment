@@ -98,17 +98,17 @@ vec4 hitShader(Ray ray, float t, Sphere sphere)
 
     float angle = dot(normalize(eye), sphereNormal);
 
-    return vec4(sphere.color.xyz, 1.0) * angle;
+    return vec4(sphereNormal, 1.0);
 }
 
 vec4 boxHitShader(vec3 color, vec3 normal)
 {
     float angle = dot(normalize(eye), normal);
 
-    if (angle > 0.2)
-        return vec4(color, 1.0) * angle;
+    if(angle < 0.9)
+        angle = 0.5;
 
-    return vec4(color, 1.0) * 0.4;
+    return vec4(color, 1) * angle;
 }
 
 float sphereHit(Sphere sphere, Ray ray)
@@ -233,16 +233,16 @@ vec3 aabbHitNormal(Ray ray, Box aabb)
     vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
 
     vec3 t1 = min(tMin, tMax);
-    int dir = 1;
+    float dir = 1.0;
     if (tMin == t1)
-        dir = -1;
+        dir = -1.0;
 
-    float tNear = max(max(max(t1.x, t1.y), t1.z), ray.tmin);
+    float tNear = max(max(t1.x, t1.y), t1.z);
 
     if (t1.x == tNear)
-        return vec3(0, dir, 0);
-    if (t1.y == tNear)
         return vec3(dir, 0, 0);
+    if (t1.y == tNear)
+        return vec3(0, dir, 0);
     return vec3(0, 0, dir);
 }
 
@@ -280,7 +280,9 @@ BoxIntersection intersectAllBoxes(Ray ray, int source)
                closestI = i;
 
                mat4 normalMatrix = transpose(inverse(wallMatrices[i]));
-               normal = normalize(normalMatrix * vec4(aabbHitNormal(wallRay, canonical), 0)).xyz;
+               vec3 objectNormal = aabbHitNormal(wallRay, canonical);
+               normal = normalize((normalMatrix * vec4(objectNormal, 0)).xyz);
+               //normal = aabbHitNormal(wallRay, canonical);
             }
         }
    }
