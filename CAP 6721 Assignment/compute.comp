@@ -9,6 +9,7 @@ struct Ray {
     vec3 origin;
     vec3 direction;
     float tmin, tmax;
+    int n;
 };
 
 struct Sphere {
@@ -44,6 +45,7 @@ struct TraceResult
 const int RAY_HIT_NONE = -1;
 const int RAY_FLAG_CAMERA = 1;
 const int RAY_FLAG_SHADOW = 2;
+const int NUM_SAMPLES = 5;
 const vec4 IN_LIGHT = vec4(1, 1, 1, 1);
 const vec4 IN_SHADOW = vec4(0, 0, 0, 0);
 
@@ -351,7 +353,7 @@ TraceResult traceRay(Ray ray, int source)
    return trace;
 }
 
-Ray rayGenerate(vec2 pixel) 
+Ray rayGenerate(vec2 pixel, int n) 
 {
     Ray ray;
     vec3 w = normalize(eye-at);
@@ -366,6 +368,8 @@ Ray rayGenerate(vec2 pixel)
     ); 
     ray.tmax = 1.0 / 0.0;
     ray.tmin = 0.0;
+
+    ray.n = n;
     return ray;
 }
 
@@ -380,13 +384,9 @@ Ray shadowRayGenerate(Ray ray, float t)
     return shadow;
 }
 
-void main() {
-
-    // Get thread coordinates
-    vec2 pixel = gl_GlobalInvocationID.xy;
-
-    // generate rays for pixel(x,y) 
-    Ray ray = rayGenerate(pixel);
+vec4 sampleRay(vec2 pixel, int n)
+{
+    Ray ray = rayGenerate(pixel, n);
     TraceResult primary = traceRay(ray, RAY_FLAG_CAMERA);
 
     vec4 color = primary.color;
@@ -397,7 +397,24 @@ void main() {
         color = secondary.color * primary.color;
     }
 
+    return color;
+}
+
+void main() {
+
+    // Get thread coordinates
+    vec2 pixel = gl_GlobalInvocationID.xy;
+
+    // trace NUM_SAMPLES rays for pixel(x,y)
+    vec4 accumulate = vec4(0);
+    for (int i = 0; i < NUM_SAMPLES; i++)
+    {
+        accumulate += sampleRay(pixel, i);
+    }
+    accumulate /= NUM_SAMPLES;
+    
+
     // Write the calculated color to the output image
-    imageStore(outputImage, ivec2(pixel.x, pixel.y), color);
+    imageStore(outputImage, ivec2(pixel.x, pixel.y), accumulate);
 }
 
