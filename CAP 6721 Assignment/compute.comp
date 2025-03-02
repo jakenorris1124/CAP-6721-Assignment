@@ -45,6 +45,7 @@ struct TraceResult
 const int RAY_HIT_NONE = -1;
 const int RAY_FLAG_CAMERA = 1;
 const int RAY_FLAG_SHADOW = 2;
+#define PI 3.141592653589793238462
 const vec4 IN_LIGHT = vec4(1, 1, 1, 1);
 const vec4 IN_SHADOW = vec4(0, 0, 0, 0);
 
@@ -299,6 +300,48 @@ BoxIntersection intersectAllBoxes(Ray ray, int source)
    boxI.hit = closestI;
    boxI.normal = normal;
    return boxI;
+}
+
+vec2 cartesianCoords(int n)
+{
+    // Find position on the square
+    int square = int(sqrt(NUM_SAMPLES));
+    int x = n % square;
+    int y = n / square;
+
+    // Find initial point
+    float height, width = 1.0;
+    float delta = height / (square * 2);
+    vec2 start = vec2(-1 + delta, 1 - delta);
+
+    // Return coords of the center of the nth cell of the unit square
+    return vec2(start.x + (delta *  x), start.y - (delta * y));
+}
+
+vec2 polarCoords(vec2 cartesian)
+{
+    // Handle degeneracy at origin
+    if (cartesian.x == 0.0 && cartesian.y == 0.0)
+        return vec2(0, 0);
+
+    float r = 0;
+    float phi = 0;
+
+    // Left and right
+    if (cartesian.x * cartesian.x > cartesian.y * cartesian.y)
+    {
+        r = cartesian.x;
+        phi = (PI / 4.0) * (cartesian.y / cartesian.x);
+    }
+    // Top and bottom
+    else
+    {
+        r = cartesian.y;
+        phi = (PI / 2.0) - ((PI / 4.0) * (cartesian.x / cartesian.y));
+    }
+    
+    // Return coords on the unit circle
+    return vec2(r * cos(phi), r * sin(phi));
 }
 
 TraceResult traceRay(Ray ray, int source) 
