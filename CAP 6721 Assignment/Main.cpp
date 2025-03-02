@@ -15,6 +15,7 @@ uint quadVAO;
 
 const std::string modelPath = "./molecules.json";
 const std::string modelName = "Ethanol";
+const int numSamples = 5;
 
 void compute(Camera* camera, vec3 light)
 {
@@ -26,6 +27,7 @@ void compute(Camera* camera, vec3 light)
 	(*camera).update();
 	glUniform2f(glGetUniformLocation(computeProgram, "resolution"), WindowWidth, WindowHeight);
 	glUniform3f(glGetUniformLocation(computeProgram, "light"), light.x, light.y, light.z);
+	glUniform1i(glGetUniformLocation(computeProgram, "NUM_SAMPLES"), numSamples * numSamples);
 
 	glDispatchCompute(workgroups[0], workgroups[1], 1);
 }
