@@ -1,6 +1,6 @@
 #include "createWalls.h"
 
-void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
+float createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
 {
 	// Calculate AAAB dimensions
 
@@ -41,6 +41,11 @@ void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
 	scaleFactor = vec3(width, height, delta / 2);
 	translation = vec3(center.x, center.y, center.z - (depth * dep));
 	matrices[4] = translate(scale(matrices[4], scaleFactor), translation);
+
+	vec4 tempMin = matrices[4] * bounds.min;
+	vec4 tempMax = matrices[4] * bounds.max;
+	float backWallDiameter = glm::length(vec3(tempMin.x, tempMin.y, tempMin.z) - vec3(tempMax.x, tempMax.y, tempMax.z));
+	printf("%f", backWallDiameter);
 	
 	GLuint wallsBuffer;
 	glGenBuffers(1, &wallsBuffer);
@@ -49,4 +54,6 @@ void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule)
 	int binding = 20;
 	glNamedBufferData(wallsBuffer, sizeof(matrices), &matrices, GL_STATIC_COPY_ARB);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, wallsBuffer);
+
+	return backWallDiameter;
 }
