@@ -15,8 +15,9 @@ uint quadVAO;
 
 const std::string modelPath = "./molecules.json";
 const std::string modelName = "Ethanol";
+const int numSamples = 100;
 
-void compute(Camera* camera, vec3 light)
+void compute(Camera* camera, vec3 light, float backWallDiameter)
 {
 	glUseProgram(computeProgram);
 	glBindImageTexture(0, texture_out, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
@@ -26,6 +27,9 @@ void compute(Camera* camera, vec3 light)
 	(*camera).update();
 	glUniform2f(glGetUniformLocation(computeProgram, "resolution"), WindowWidth, WindowHeight);
 	glUniform3f(glGetUniformLocation(computeProgram, "light"), light.x, light.y, light.z);
+	glUniform1f(glGetUniformLocation(computeProgram, "lightRadius"), backWallDiameter / 10);
+	glUniform1i(glGetUniformLocation(computeProgram, "NUM_SAMPLES"), numSamples);
+	glUniform1i(glGetUniformLocation(computeProgram, "NUM_SAMPLES_SQRT"), (int) sqrt(numSamples));
 
 	glDispatchCompute(workgroups[0], workgroups[1], 1);
 }
@@ -54,7 +58,7 @@ int main(int argc, char* argv[])
 
 	Box aabb = { vec4(-1, -1, -1, 1), vec4(1, 1, 1, 1) };
 	float delta = 0.1;
-	createTransformMatrices(aabb, delta, molecule);
+	float backWallDiameter = createTransformMatrices(aabb, delta, molecule);
 	
 	Camera camera = Camera(
 		vec3(center.x, center.y, center.z + molecule.getDiagonal() * 2),
@@ -64,11 +68,12 @@ int main(int argc, char* argv[])
 	);
 	camera.activate(computeProgram);
 
-	vec3 light = camera.getEye() - vec3(1, 0.3, 0.3);
+	vec3 light = camera.getEye();
+	camera.setRotation(0.1, vec3(0.0, center.y, 0.0));
 
 	do {
 		glClear(GL_COLOR_BUFFER_BIT);
-		compute(&camera, light);
+		compute(&camera, light, backWallDiameter);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		draw();
 		glfwSwapBuffers(window);

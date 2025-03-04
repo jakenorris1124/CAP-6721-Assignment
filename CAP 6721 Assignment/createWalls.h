@@ -9,4 +9,4 @@
 #include "model.h"
 using namespace glm;
 
-void createTransformMatrices(Box aabb, float delta, ModelWrapper molecule);
+float createTransformMatrices(Box aabb, float delta, ModelWrapper molecule);

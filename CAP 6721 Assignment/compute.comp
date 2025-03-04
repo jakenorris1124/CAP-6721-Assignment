@@ -9,6 +9,7 @@ struct Ray {
     vec3 origin;
     vec3 direction;
     float tmin, tmax;
+    int n;
 };
 
 struct Sphere {
@@ -44,8 +45,15 @@ struct TraceResult
 const int RAY_HIT_NONE = -1;
 const int RAY_FLAG_CAMERA = 1;
 const int RAY_FLAG_SHADOW = 2;
+
+#define PI 3.141592653589793238462
+
 const vec4 IN_LIGHT = vec4(1, 1, 1, 1);
 const vec4 IN_SHADOW = vec4(0, 0, 0, 0);
+
+const float ALBEDO = 0.5;
+const float LIGHT_RADIANCE = 850;
+const vec3 LIGHT_NORMAL = vec3(0, 0, 1);
 
 
 layout (std430, binding = 10) readonly buffer boundsBuffer
@@ -72,14 +80,23 @@ layout (std430, binding = 20) readonly buffer wallBuffer
 
 // Inside the compute shader kernel:
 uniform vec3 eye, at, up, light;
-uniform float fov;
+uniform float fov, lightRadius;
 uniform vec2 resolution;
+uniform int NUM_SAMPLES, NUM_SAMPLES_SQRT;
 
 bool aabbHit(Ray ray, Box aabb);
+vec3 lightSampleDirection(vec3 origin, int n);
+vec2 cartesianCoords(int n);
+vec2 polarCoords(vec2 cartesian);
 
 bool validT(float t, Ray ray)
 {
     return t > ray.tmin && t < ray.tmax;
+}
+
+float cosTheta(vec3 v1, vec3 v2)
+{
+    return dot(v1, v2) / (length(v1) * length(v2));
 }
 
 vec4 missShader(Ray ray) 
@@ -91,24 +108,18 @@ vec4 missShader(Ray ray)
     return vec4(color.xyz, 1.0);
 }
 
-vec4 hitShader(Ray ray, float t, Sphere sphere)
+vec4 hitShader(vec3 color, vec3 normal, vec3 point, Ray ray)
 {
-    vec3 intersectionPoint = ray.origin + (t * ray.direction);
-    vec3 sphereNormal = normalize(intersectionPoint - sphere.center);
+    vec3 surface = ALBEDO * (color / PI);
 
-    float angle = dot(normalize(eye), sphereNormal);
+    vec3 lightDir = lightSampleDirection(point, ray.n);
 
-    return vec4(sphereNormal, 1.0);
-}
+    float dist = length(lightDir);
+    float cosTP = cosTheta(normal, lightDir);
+    float cosTQ = cosTheta(LIGHT_NORMAL, lightDir);
+    float lighting = cosTP * (cosTQ / (dist * dist)) * LIGHT_RADIANCE;
 
-vec4 boxHitShader(vec3 color, vec3 normal)
-{
-    float angle = dot(normalize(eye), normal);
-
-    if(angle < 0.9)
-        angle = 0.5;
-
-    return vec4(color, 1) * angle;
+    return vec4(surface * lighting, 1);
 }
 
 float sphereHit(Sphere sphere, Ray ray)
@@ -218,32 +229,33 @@ vec3 aabbHitPoint(Ray ray, Box aabb)
     vec3 t1 = min(tMin, tMax);
     vec3 t2 = max(tMin, tMax);
 
-    float tNear = max(max(max(t1.x, t1.y), t1.z), ray.tmin);
-    float tFar = min(min(min(t2.x, t2.y), t2.z), ray.tmax);
+    float tNear = max(max(t1.x, t1.y), t1.z);
 
-    if (tNear <= tFar)
-        return ray.origin + (t2 * ray.direction);
-
-    return ray.origin;
+    return ray.origin + (tNear * ray.direction);
 }
 
 vec3 aabbHitNormal(Ray ray, Box aabb)
 {
     vec3 tMin = (aabb.minimum.xyz - ray.origin) / ray.direction;
     vec3 tMax = (aabb.maximum.xyz - ray.origin) / ray.direction;
-
     vec3 t1 = min(tMin, tMax);
-    float dir = 1.0;
-    if (tMin == t1)
-        dir = -1.0;
-
     float tNear = max(max(t1.x, t1.y), t1.z);
 
-    if (t1.x == tNear)
-        return vec3(dir, 0, 0);
-    if (t1.y == tNear)
-        return vec3(0, dir, 0);
-    return vec3(0, 0, dir);
+    if (tMin.x == tNear)
+        return vec3(-1, 0, 0);
+    if (tMax.x == tNear)
+        return vec3(1, 0, 0);
+
+    if (tMin.y == tNear)
+        return vec3(0, -1, 0);
+    if (tMax.y == tNear)
+        return vec3(0, 1, 0);
+
+    if (tMin.z == tNear)
+        return vec3(0, 0, -1);
+    if (tMax.z == tNear)
+        return vec3(0, 0, 1);
+    
 }
 
 BoxIntersection intersectAllBoxes(Ray ray, int source)
@@ -262,27 +274,25 @@ BoxIntersection intersectAllBoxes(Ray ray, int source)
         wallRay.origin = (inverse(wallMatrices[i]) * vec4(ray.origin, 1)).xyz;
         wallRay.direction = (inverse(wallMatrices[i]) * vec4(ray.direction, 0)).xyz;
 
-        vec3 point = aabbHitPoint(wallRay, canonical);
-        if(point != wallRay.origin)
+        if(aabbHit(wallRay, canonical))
         {
+            if(source == RAY_FLAG_SHADOW)
+            {
+                boxI.t = 1;
+                return boxI;
+            }
+            vec3 point = aabbHitPoint(wallRay, canonical);
             point = (wallMatrices[i] * vec4(point, 1)).xyz;
             float t = distance(point, ray.origin);
 
             if (t > ray.tmin && t < closestT)
             {
-               if(source == RAY_FLAG_SHADOW)
-               {
-                    boxI.t = t;
-                    return boxI;
-               }
-
                closestT = t;
                closestI = i;
 
                mat4 normalMatrix = transpose(inverse(wallMatrices[i]));
                vec3 objectNormal = aabbHitNormal(wallRay, canonical);
                normal = normalize((normalMatrix * vec4(objectNormal, 0)).xyz);
-               //normal = aabbHitNormal(wallRay, canonical);
             }
         }
    }
@@ -297,6 +307,55 @@ BoxIntersection intersectAllBoxes(Ray ray, int source)
    boxI.hit = closestI;
    boxI.normal = normal;
    return boxI;
+}
+
+vec2 cartesianCoords(int n)
+{
+    // Find position on the square
+    int x = n % NUM_SAMPLES_SQRT;
+    int y = n / NUM_SAMPLES_SQRT;
+
+    // Find initial point
+    float height = 2.0;
+    float delta = height / (NUM_SAMPLES_SQRT * 2);
+    vec2 start = vec2(-1 + delta, 1 - delta);
+
+    // Return coords of the center of the nth cell of the unit square
+    return vec2(start.x + (delta *  x * 2), start.y - (delta * y * 2));
+}
+
+vec2 polarCoords(vec2 cartesian)
+{
+    // Handle degeneracy at origin
+    if (cartesian.x == 0.0 && cartesian.y == 0.0)
+        return vec2(0, 0);
+
+    float r = 0;
+    float phi = 0;
+
+    // Left and right
+    if (cartesian.x * cartesian.x > cartesian.y * cartesian.y)
+    {
+        r = cartesian.x;
+        phi = (PI / 4.0) * (cartesian.y / cartesian.x);
+    }
+    // Top and bottom
+    else
+    {
+        r = cartesian.y;
+        phi = (PI / 2.0) - ((PI / 4.0) * (cartesian.x / cartesian.y));
+    }
+    
+    // Return coords on the unit circle
+    return vec2(r * cos(phi), r * sin(phi));
+}
+
+vec3 lightSampleDirection(vec3 origin, int n)
+{
+    vec2 polar = polarCoords(cartesianCoords(n));
+    vec3 samplePoint = vec3((light.x + polar.x) * lightRadius, (light.y + polar.y) * lightRadius, light.z);
+
+    return samplePoint - origin;
 }
 
 TraceResult traceRay(Ray ray, int source) 
@@ -325,7 +384,8 @@ TraceResult traceRay(Ray ray, int source)
     if(spherePayload.t != RAY_HIT_NONE && spherePayload.t < boxPayload.t)
     {
          vec3 hitPoint = ray.origin + (spherePayload.t * ray.direction);
-         trace.color = hitShader(ray, spherePayload.t, spherePayload.hit);
+         vec3 sphereNormal = normalize(hitPoint - spherePayload.hit.center);
+         trace.color = hitShader(spherePayload.hit.color.xyz, sphereNormal, hitPoint, ray);
          trace.t = spherePayload.t;
          return trace;
     }
@@ -341,7 +401,7 @@ TraceResult traceRay(Ray ray, int source)
         if(boxPayload.hit == 4)
             color = vec4(1, 1, 1, 1);
 
-         trace.color = boxHitShader(color.xyz, boxPayload.normal);
+         trace.color = hitShader(color.xyz, boxPayload.normal, ray.origin + (boxPayload.t * ray.direction), ray);
          trace.t = boxPayload.t;
          return trace;
     }
@@ -351,7 +411,7 @@ TraceResult traceRay(Ray ray, int source)
    return trace;
 }
 
-Ray rayGenerate(vec2 pixel) 
+Ray rayGenerate(vec2 pixel, int n) 
 {
     Ray ray;
     vec3 w = normalize(eye-at);
@@ -366,6 +426,8 @@ Ray rayGenerate(vec2 pixel)
     ); 
     ray.tmax = 1.0 / 0.0;
     ray.tmin = 0.0;
+
+    ray.n = n;
     return ray;
 }
 
@@ -373,20 +435,16 @@ Ray shadowRayGenerate(Ray ray, float t)
 {
     Ray shadow;
     shadow.origin = ray.origin + (t * ray.direction);
-    shadow.direction = light - shadow.origin;
-    shadow.tmin = 0.01;
+    shadow.direction = lightSampleDirection(shadow.origin, ray.n);
+    shadow.tmin = 0.1;
     shadow.tmax = length(shadow.direction);
 
     return shadow;
 }
 
-void main() {
-
-    // Get thread coordinates
-    vec2 pixel = gl_GlobalInvocationID.xy;
-
-    // generate rays for pixel(x,y) 
-    Ray ray = rayGenerate(pixel);
+vec4 sampleRay(vec2 pixel, int n)
+{
+    Ray ray = rayGenerate(pixel, n);
     TraceResult primary = traceRay(ray, RAY_FLAG_CAMERA);
 
     vec4 color = primary.color;
@@ -397,7 +455,23 @@ void main() {
         color = secondary.color * primary.color;
     }
 
+    return color;
+}
+
+void main() {
+
+    // Get thread coordinates
+    vec2 pixel = gl_GlobalInvocationID.xy;
+
+    // trace NUM_SAMPLES rays for pixel(x,y)
+    vec4 accumulate = vec4(0);
+    for (int i = 0; i < NUM_SAMPLES; ++i)
+    {
+        accumulate += sampleRay(pixel, i);
+    }
+    accumulate /= NUM_SAMPLES;
+
     // Write the calculated color to the output image
-    imageStore(outputImage, ivec2(pixel.x, pixel.y), color);
+    imageStore(outputImage, ivec2(pixel.x, pixel.y), accumulate);
 }
 
