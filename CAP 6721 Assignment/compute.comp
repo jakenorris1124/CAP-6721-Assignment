@@ -310,12 +310,12 @@ vec2 cartesianCoords(int n)
     int y = n / square;
 
     // Find initial point
-    float height, width = 1.0;
+    float height, width = 2.0;
     float delta = height / (square * 2);
     vec2 start = vec2(-1 + delta, 1 - delta);
 
     // Return coords of the center of the nth cell of the unit square
-    return vec2(start.x + (delta *  x), start.y - (delta * y));
+    return vec2(start.x + (delta *  x * 2), start.y - (delta * y * 2));
 }
 
 vec2 polarCoords(vec2 cartesian)
